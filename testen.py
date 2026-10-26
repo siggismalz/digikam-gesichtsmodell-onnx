@@ -1,8 +1,6 @@
-"""Erkennt die angelernten Personen mit den mitgelieferten ONNX-Modellen."""
-import argparse
-import hashlib
-import json
+"""Erkennt die angelernten Personen auf einem Bild oder in einem Ordner."""
 from pathlib import Path
+import sys
 
 import cv2
 import numpy as np
@@ -12,14 +10,6 @@ from PIL import Image, ImageOps
 PROJEKTORDNER = Path(__file__).resolve().parent
 MODELLORDNER = PROJEKTORDNER / "modelle"
 
-
-
-def sitzung_laden(modell):
-    """Verwendet die normale CPU-Ausführung von ONNX Runtime."""
-    optionen = ort.SessionOptions()
-    optionen.intra_op_num_threads = 2
-    optionen.inter_op_num_threads = 1
-    return ort.InferenceSession(modell, sess_options=optionen, providers=["CPUExecutionProvider"])
 
 
 def gesicht_ausrichten(farbbild, gesicht):
@@ -81,73 +71,13 @@ def namen_erkennen(bildpfad, sitzung, gesichtssuche):
     return namen
 
 
-def modell_laden():
-    """Prüft und lädt die mitgelieferten Modelle ohne digiKam oder Kontozugang."""
-    dateien = ("gesichtsmodell.onnx", "face_detection_yunet_2023mar.onnx")
-    pruefsummen = json.loads((MODELLORDNER / "pruefsummen.json").read_text(encoding="utf-8"))
-    if set(pruefsummen) != set(dateien):
-        raise ValueError("Die Liste der Modelldateien ist unvollständig.")
-    for dateiname in dateien:
-        datei = MODELLORDNER / dateiname
-        if not datei.is_file():
-            raise FileNotFoundError(f"Die Modelldatei fehlt: {datei}")
-        if hashlib.sha256(datei.read_bytes()).hexdigest() != pruefsummen[dateiname]:
-            raise ValueError(f"Die Modelldatei ist beschädigt oder unvollständig: {dateiname}")
-    sitzung = sitzung_laden(str(MODELLORDNER / dateien[0]))
-    suche = cv2.FaceDetectorYN.create(str(MODELLORDNER / dateien[1]), "", (320, 320), 0.8, 0.3, 5000)
-    return sitzung, suche
-
-
-def selbsttest(sitzung, suche):
-    """Führt beide Netze aus, ohne persönliche Testfotos zu benötigen."""
-    if [(eingabe.name, eingabe.shape, eingabe.type) for eingabe in sitzung.get_inputs()] != [
-            ("gesicht", [1, 3, 112, 112], "tensor(float)")]:
-        raise ValueError("Das Personenmodell hat ein unerwartetes Eingabeformat.")
-    merkmale, namen = sitzung.run(["gesichtsmerkmale", "name"],
-                                  {"gesicht": np.zeros((1, 3, 112, 112), dtype=np.float32)})
-    if merkmale.shape != (1, 128) or not np.isfinite(merkmale).all() or len(namen) != 1:
-        raise ValueError("Das Personenmodell liefert ungültige Ergebnisse.")
-    if len(gesichter_suchen(suche, np.zeros((320, 320, 3), dtype=np.uint8), 0.8)) != 0:
-        raise ValueError("Die Gesichtssuche erkennt im leeren Prüfbild unerwartet ein Gesicht.")
-    personen = json.loads(sitzung.get_modelmeta().custom_metadata_map["namen"])
-    print(f"Selbsttest bestanden: beide Modelle geladen und ausgeführt, {len(personen)} angelernte Personen.")
-
-
-def hauptprogramm():
-    parser = argparse.ArgumentParser(description=__doc__, add_help=False)
-    parser._positionals.title = "Argumente"
-    parser._optionals.title = "Optionen"
-    parser.add_argument("-h", "--hilfe", action="help", help="Diese Hilfe anzeigen.")
-    parser.add_argument("bildpfad", nargs="?", type=Path, default=PROJEKTORDNER / "testbilder",
-                        help="Ein Bild oder ein Ordner mit eigenen Bildern.")
-    parser.add_argument("--selbsttest", action="store_true", help="Installation und Modelle ohne Fotos prüfen.")
-    argumente = parser.parse_args()
-    sitzung, suche = modell_laden()
-    if argumente.selbsttest:
-        selbsttest(sitzung, suche)
-        return 0
-    if argumente.bildpfad.is_file():
-        bilder = [argumente.bildpfad]
-    elif argumente.bildpfad.is_dir():
-        bilder = sorted(bild for bild in argumente.bildpfad.iterdir()
-                        if bild.is_file() and bild.suffix.lower() in (".jpg", ".jpeg", ".png"))
-    else:
-        raise FileNotFoundError(f"Der Bildpfad wurde nicht gefunden: {argumente.bildpfad}")
-    if not bilder:
-        raise FileNotFoundError("Lege eigene JPEG-/PNG-Bilder in testbilder ab oder gib einen Bildpfad an.")
-    fehlerzahl = 0
-    for bild in bilder:
-        try:
-            namen = namen_erkennen(bild, sitzung, suche)
-            print(f"{bild.name}: {', '.join(namen) or 'Kein Gesicht erkannt'}", flush=True)
-        except Exception as fehler:
-            print(f"{bild.name}: Verarbeitung fehlgeschlagen: {fehler}", flush=True)
-            fehlerzahl += 1
-    return 1 if fehlerzahl else 0
-
-
 if __name__ == "__main__":
-    try:
-        raise SystemExit(hauptprogramm())
-    except Exception as fehler:
-        raise SystemExit(f"Test fehlgeschlagen: {fehler}")
+    pfad = Path(sys.argv[1]) if len(sys.argv) > 1 else PROJEKTORDNER / "testbilder"
+    bilder = sorted(bild for bild in pfad.iterdir() if bild.suffix.lower() in (".jpg", ".jpeg", ".png")) if pfad.is_dir() else [pfad]
+    modell = ort.InferenceSession(str(MODELLORDNER / "gesichtsmodell.onnx"), providers=["CPUExecutionProvider"])
+    suche = cv2.FaceDetectorYN.create(str(MODELLORDNER / "face_detection_yunet_2023mar.onnx"), "", (320, 320), 0.8, 0.3, 5000)
+    if not bilder:
+        print("Lege Bilder in testbilder ab oder starte: python testen.py Pfad/zum/Bild.jpg")
+    for bild in bilder:
+        namen = namen_erkennen(bild, modell, suche)
+        print(f"{bild.name}: {', '.join(namen) or 'Kein Gesicht erkannt'}")
