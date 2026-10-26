@@ -1,0 +1,31 @@
+Modellherkunft und Änderungen
+============================
+
+SFace: vortrainiertes MobileFaceNet mit SFace-Verlustfunktion.
+Beitrag von Yaoyao Zhong; ONNX-Konvertierung durch Chengrui Wang.
+Quelle: https://github.com/opencv/opencv_zoo/tree/main/models/face_recognition_sface
+Originaldatei: face_recognition_sface_2021dec.onnx
+SHA-256: 0ba9fbfa01b5270c96627c4ef784da859931e02f04419c829e83484087c34e79
+Lizenz: Apache License 2.0, siehe LIZENZEN/SFace-Apache-2.0.txt.
+
+Änderung: Die unveränderten vortrainierten SFace-Gewichte wurden mit einem
+persönlich trainierten linearen SVM-Klassifikator, Gesichtsreferenzen,
+Personennamen und Regeln zur Zurückweisung unsicherer Zuordnungen zu
+gesichtsmodell.onnx verbunden. Die SFace-Netzgewichte wurden dabei nicht
+feinabgestimmt. Eingaben und Ausgaben sowie Modellmetadaten wurden angepasst.
+Der exportierte Graph trägt eine entsprechende Erzeuger- und Verfahrensangabe.
+Es wurde kein neuer Transformer trainiert.
+
+YuNet: Copyright (c) 2020 Shiqi Yu <shiqi.yu@gmail.com>.
+Quelle: https://github.com/opencv/opencv_zoo/tree/main/models/face_detection_yunet
+Datei: face_detection_yunet_2023mar.onnx, unverändert übernommen.
+SHA-256: 8f2383e4dd3cfbb4553ea8718107fc0423210dc964f9f4280604804ed2552fa4
+Lizenz: MIT, siehe LIZENZEN/YuNet-MIT.txt.
+
+Die SHA-256-Werte beider ursprünglichen Basismodelle wurden mit den
+Git-LFS-Zeigerdateien des offiziellen OpenCV-Zoo-Repositorys verglichen.
+Die Prüfsumme des fertigen persönlichen Modells steht in
+modelle/pruefsummen.json.
+
+Die Lizenztexte der Basismodelle sind unverändert beigefügt. Die persönlichen
+Gesichtsreferenzen und Namen werden hierdurch nicht allgemein freigegeben.
